@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Local AI Chat (Linux)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh;}
+    header { padding: 10px; background: #222; color: #fff; }
+    main { flex: 1; display: flex; flex-direction: column; padding: 10px; gap: 8px; }
+    #chat { flex: 1; border: 1px solid #ccc; padding: 10px; overflow-y: auto; }
+    .msg-user { font-weight: bold; color: #1a73e8; margin-top: 6px; }
+    .msg-assistant { font-weight: bold; color: #0f9d58; margin-top: 6px; }
+    textarea { width: 100%; resize: vertical; min-height: 60px; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    label { font-size: 0.9rem; }
+    input[type="number"], input[type="text"] { padding: 4px; }
+    button { padding: 6px 10px; cursor: pointer; }
+  </style>
+</head>
+<body>
+<header>
+  <h2>Local AI Chat (Ubuntu / Linux)</h2>
+</header>
+<main>
+  <div class="row">
+    <label>Model path:
+      <input type="text" id="modelPath" placeholder="/home/user/models/llama-model.gguf" style="width: 320px;" />
+    </label>
+    <label>Max tokens:
+      <input type="number" id="maxTokens" value="256" min="16" max="4096" />
+    </label>
+    <label>Temperature:
+      <input type="number" id="temperature" value="0.7" min="0" max="2" step="0.05" />
+    </label>
+    <button id="btnClear">Clear Chat</button>
+  </div>
+
+  <label>System prompt:</label>
+  <textarea id="systemPrompt">You are a helpful AI assistant.</textarea>
+
+  <div id="chat"></div>
+
+  <label>Your message:</label>
+  <textarea id="userInput" placeholder="Type your message..."></textarea>
+
+  <div class="row">
+    <button id="btnSend">Send</button>
+    <span id="status"></span>
+  </div>
+</main>
+
+<script>
+  const chatDiv = document.getElementById('chat');
+  const userInput = document.getElementById('userInput');
+  const systemPromptEl = document.getElementById('systemPrompt');
+  const modelPathEl = document.getElementById('modelPath');
+  const maxTokensEl = document.getElementById('maxTokens');
+  const temperatureEl = document.getElementById('temperature');
+  const statusEl = document.getElementById('status');
+  const btnSend = document.getElementById('btnSend');
+  const btnClear = document.getElementById('btnClear');
+
+  function appendMessage(role, text) {
+    const roleClass = role === 'user' ? 'msg-user' : 'msg-assistant';
+    const label = role === 'user' ? 'You' : 'Assistant';
+
+    const labelEl = document.createElement('div');
+    labelEl.className = roleClass;
+    labelEl.textContent = label + ':';
+
+    const textEl = document.createElement('div');
+    textEl.textContent = text;
+
+    chatDiv.appendChild(labelEl);
+    chatDiv.appendChild(textEl);
+    chatDiv.scrollTop = chatDiv.scrollHeight;
+  }
+
+  async function sendMessage() {
+    const msg = userInput.value.trim();
+    if (!msg) return;
+
+    const payload = {
+      message: msg,
+      max_tokens: parseInt(maxTokensEl.value, 10),
+      temperature: parseFloat(temperatureEl.value),
+      system_prompt: systemPromptEl.value,
+    };
+
+    if (modelPathEl.value.trim()) {
+      payload.model_path = modelPathEl.value.trim();
+    }
+
+    appendMessage('user', msg);
+    userInput.value = '';
+
+    btnSend.disabled = true;
+    statusEl.textContent = 'Generating...';
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.error) {
+        appendMessage('assistant', '[Error] ' + data.error);
+      } else {
+        appendMessage('assistant', data.reply);
+      }
+    } catch (err) {
+      appendMessage('assistant', '[Network error] ' + err);
+    } finally {
+      btnSend.disabled = false;
+      statusEl.textContent = '';
+    }
+  }
+
+  btnSend.addEventListener('click', sendMessage);
+  userInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      sendMessage();
+    }
+  });
+
+  btnClear.addEventListener('click', async () => {
+    chatDiv.innerHTML = '';
+    await fetch('/api/clear', { method: 'POST' });
+  });
+</script>
+</body>
+</html>
