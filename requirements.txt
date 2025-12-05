@@ -1,1 +1,5 @@
+fastapi
+uvicorn
+llama-cpp-python
+jinja2
 
